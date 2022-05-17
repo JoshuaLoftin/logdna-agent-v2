@@ -3,21 +3,21 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: logdna-agent
-  namespace: logdna-agent
+  namespace: logdna
   labels:
     app.kubernetes.io/name: logdna-agent
     app.kubernetes.io/instance: logdna-agent
-    app.kubernetes.io/version: 3.6.0-dev
+    app.kubernetes.io/version: 3.3.3
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  namespace: logdna-agent
+  namespace: logdna
   name: logdna-agent
   labels:
     app.kubernetes.io/name: logdna-agent
     app.kubernetes.io/instance: logdna-agent
-    app.kubernetes.io/version: 3.6.0-dev
+    app.kubernetes.io/version: 3.3.3
 rules:
   - apiGroups: [""]
     resources: ["configmaps"]
@@ -27,11 +27,11 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: logdna-agent
-  namespace: logdna-agent
+  namespace: logdna
   labels:
     app.kubernetes.io/name: logdna-agent
     app.kubernetes.io/instance: logdna-agent
-    app.kubernetes.io/version: 3.6.0-dev
+    app.kubernetes.io/version: 3.3.3
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -39,7 +39,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: logdna-agent
-    namespace: logdna-agent
+    namespace: logdna
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -48,7 +48,7 @@ metadata:
   labels:
     app.kubernetes.io/name: logdna-agent
     app.kubernetes.io/instance: logdna-agent
-    app.kubernetes.io/version: 3.6.0-dev
+    app.kubernetes.io/version: 3.3.3
 rules:
   - apiGroups: [""]
     resources: ["events"]
@@ -64,7 +64,7 @@ metadata:
   labels:
     app.kubernetes.io/name: logdna-agent
     app.kubernetes.io/instance: logdna-agent
-    app.kubernetes.io/version: 3.6.0-dev
+    app.kubernetes.io/version: 3.3.3
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -72,22 +72,18 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: logdna-agent
-    namespace: logdna-agent
+    namespace: logdna
 ---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: logdna-agent
-  namespace: logdna-agent
+  namespace: logdna
   labels:
     app.kubernetes.io/name: logdna-agent
     app.kubernetes.io/instance: logdna-agent
-    app.kubernetes.io/version: 3.6.0-dev
+    app.kubernetes.io/version: 3.3.3
 spec:
-  updateStrategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 100%
   selector:
     matchLabels:
       app: logdna-agent
@@ -97,19 +93,40 @@ spec:
         app: logdna-agent
         app.kubernetes.io/name: logdna-agent
         app.kubernetes.io/instance: logdna-agent
-        app.kubernetes.io/version: 3.6.0-dev
+        app.kubernetes.io/version: 3.3.3
     spec:
-      serviceAccountName: logdna-agent
+      volumes:
+        - name: varlog
+          hostPath:
+            path: /var/log
+            type: ''
+        - name: vardata
+          hostPath:
+            path: /var/data
+            type: ''
+        - name: varliblogdna
+          hostPath:
+            path: /var/lib/logdna
+            type: ''
+        - name: varlibdockercontainers
+          hostPath:
+            path: /var/lib/docker/containers
+            type: ''
+        - name: mnt
+          hostPath:
+            path: /mnt
+            type: ''
+        - name: osrelease
+          hostPath:
+            path: /etc/os-release
+            type: ''
+        - name: logdnahostname
+          hostPath:
+            path: /etc/hostname
+            type: ''
       containers:
         - name: logdna-agent
-          image: logdna/logdna-agent:3.6.0-dev
-          imagePullPolicy: Always
-          securityContext:
-            capabilities:
-              add:
-                - DAC_READ_SEARCH
-              drop:
-                - all
+          image: logdna/logdna-agent:3.3.3
           env:
             - name: LOGDNA_INGESTION_KEY
               valueFrom:
@@ -123,24 +140,42 @@ spec:
             - name: POD_APP_LABEL
               valueFrom:
                 fieldRef:
+                  apiVersion: v1
                   fieldPath: metadata.labels['app.kubernetes.io/name']
             - name: POD_NAME
               valueFrom:
                 fieldRef:
+                  apiVersion: v1
                   fieldPath: metadata.name
             - name: NODE_NAME
               valueFrom:
                 fieldRef:
+                  apiVersion: v1
                   fieldPath: spec.nodeName
             - name: NAMESPACE
               valueFrom:
                 fieldRef:
+                  apiVersion: v1
                   fieldPath: metadata.namespace
+            - name: LOGDNA_EXCLUSION_RULES
+              value: >-
+                /var/log/containers/tunnelfront*,/var/log/containers/prometheus*,/var/log/containers/cm-acme*,/var/log/containers/logdna-agent*,/var/log/containers/aqua*,/var/log/containers/calico*,/var/log/containers/certmanager*,/var/log/containers/csi*,/var/log/containers/dashboard*,/var/log/containers/horusd*,/var/log/containers/kube*,/var/log/containers/nginx*,/var/log/containers/node-exporter*,/var/log/containers/oneagent-*,/var/log/azure/**,/var/log/samba/**,/var/log/*.gz,/var/log/kubelet.log,/var/log/syslog,/var/log/ntpstats/**,/var/log/containerd.log,/var/log/alb/**,/var/log/dist-upgrade/**,/var/log/apt/**,/var/log/journal/**,/var/log/dynatrace/**,/var/log/landscape/**,/var/log/lxd/**,/var/log/unattended-upgrades/**,/var/log/containers/*_kube-system_*,/var/log/containers/*_logger*,/var/log/containers/*_kube-public_*,/var/log/containers/*_ibm-operators_*,/var/log/containers/*_ibm-system_*,/var/log/containers/*_kube-node-lease_*,/var/log/containers/*_curl*,/var/log/containers/*_database*,/var/log/containers/*_default_*,/var/log/containers/*_dev-content_*,/var/log/containers/*_dummy*,/var/log/containers/*_dynatrace_*,/var/log/containers/*_healthcheck_*,/var/log/containers/*_ibm-cert-store_*,/var/log/containers/*_ibm-operators_*,/var/log/containers/*_ibm-system_*,/var/log/containers/*_istio-system_*,/var/log/containers/*_kube-node-lease_*,/var/log/containers/*_kube-system_*,/var/log/containers/*_mse_*,/var/log/!(containers)/**,/var/log/containers/sysdig*
+            - name: CLUSTER_CONTEXT
+              valueFrom:
+                configMapKeyRef:
+                  name: logagent-configmap
+                  key: CLUSTER_NAME
+            - name: LOGDNA_PLATFORM
+              value: k8s
+            - name: LOGDNA_TAGS
+              value: $(CLUSTER_CONTEXT)
+            - name: LOGDNA_INGEST_TIMEOUT
+              value: '30000'
           resources:
-            requests:
-              cpu: 20m
             limits:
-              memory: 500Mi
+              memory: 2000Mi
+            requests:
+              cpu: 500m
           volumeMounts:
             - name: varlog
               mountPath: /var/log
@@ -149,34 +184,35 @@ spec:
             - name: varliblogdna
               mountPath: /var/lib/logdna
             - name: varlibdockercontainers
+              readOnly: true
               mountPath: /var/lib/docker/containers
-              readOnly: true
             - name: mnt
-              mountPath: /mnt
               readOnly: true
+              mountPath: /mnt
             - name: osrelease
               mountPath: /etc/os-release
             - name: logdnahostname
               mountPath: /etc/logdna-hostname
-      volumes:
-        - name: varlog
-          hostPath:
-            path: /var/log
-        - name: vardata
-          hostPath:
-            path: /var/data
-        - name: varliblogdna
-          hostPath:
-            path: /var/lib/logdna
-        - name: varlibdockercontainers
-          hostPath:
-            path: /var/lib/docker/containers
-        - name: mnt
-          hostPath:
-            path: /mnt
-        - name: osrelease
-          hostPath:
-            path: /etc/os-release
-        - name: logdnahostname
-          hostPath:
-            path: /etc/hostname
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: Always
+          securityContext:
+            capabilities:
+              add:
+                - DAC_READ_SEARCH
+              drop:
+                - all
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      serviceAccountName: logdna-agent
+      serviceAccount: logdna-agent
+      securityContext: {}
+      schedulerName: default-scheduler
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 100%
+      maxSurge: 0
+  revisionHistoryLimit: 10
+  minReadySeconds: 10
